@@ -160,7 +160,7 @@ function App() {
               a manual trigger or external backend integration. */}
           {urls.saweria && (
             <iframe
-              src={urls.saweria}
+              src={`https://api.allorigins.win/raw?url=${encodeURIComponent(urls.saweria)}`}
               className="w-full h-full"
               allow="autoplay"
               title="Saweria Overlay"
