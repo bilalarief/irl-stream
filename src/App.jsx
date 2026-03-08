@@ -160,7 +160,7 @@ function App() {
               a manual trigger or external backend integration. */}
           {urls.saweria && (
             <iframe
-              src={`https://corsproxy.io/?${encodeURIComponent(urls.saweria)}`}
+              src={urls.saweria}
               className="w-full h-full"
               allow="autoplay"
               title="Saweria Overlay"
