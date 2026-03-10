@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useCallback } from 'react';
 import SaweriaAlert from './SaweriaAlert';
 
 function App() {
@@ -9,6 +9,9 @@ function App() {
   });
   const [isConfigured, setIsConfigured] = useState(false);
   const [isAlertActive, setIsAlertActive] = useState(false);
+
+  const handleAlertStart = useCallback(() => setIsAlertActive(true), []);
+  const handleAlertEnd = useCallback(() => setIsAlertActive(false), []);
 
   // Load from local storage on mount
   useEffect(() => {
@@ -168,8 +171,8 @@ function App() {
         {/* Saweria Alert Layer (WebSocket-based, NO iframe!) */}
         <SaweriaAlert
           streamKey={streamKey}
-          onAlertStart={() => setIsAlertActive(true)}
-          onAlertEnd={() => setIsAlertActive(false)}
+          onAlertStart={handleAlertStart}
+          onAlertEnd={handleAlertEnd}
         />
 
       </div>

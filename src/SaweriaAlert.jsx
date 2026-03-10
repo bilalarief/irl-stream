@@ -10,6 +10,12 @@ export default function SaweriaAlert({ streamKey, onAlertStart, onAlertEnd }) {
     const socketRef = useRef(null);
     const audioRef = useRef(null);
     const reconnectRef = useRef(null);
+    const onAlertStartRef = useRef(onAlertStart);
+    const onAlertEndRef = useRef(onAlertEnd);
+
+    // Keep refs in sync with latest props
+    useEffect(() => { onAlertStartRef.current = onAlertStart; }, [onAlertStart]);
+    useEffect(() => { onAlertEndRef.current = onAlertEnd; }, [onAlertEnd]);
 
     // Duration to display the alert (ms)
     const ALERT_DURATION = 8000;
@@ -32,7 +38,7 @@ export default function SaweriaAlert({ streamKey, onAlertStart, onAlertEnd }) {
             media: data.media || null,
         });
         setIsVisible(true);
-        onAlertStart?.();
+        onAlertStartRef.current?.();
 
         // Clear previous timeout
         if (timeoutRef.current) clearTimeout(timeoutRef.current);
@@ -40,10 +46,10 @@ export default function SaweriaAlert({ streamKey, onAlertStart, onAlertEnd }) {
         // Hide after duration
         timeoutRef.current = setTimeout(() => {
             setIsVisible(false);
-            onAlertEnd?.();
+            onAlertEndRef.current?.();
             setTimeout(() => setAlert(null), 500); // wait for fade out animation
         }, ALERT_DURATION);
-    }, [onAlertStart, onAlertEnd]);
+    }, []);
 
     useEffect(() => {
         if (!streamKey) return;
