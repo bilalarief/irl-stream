@@ -1,7 +1,6 @@
 import { useState, useEffect, useCallback, useRef } from 'react';
-import { io } from 'socket.io-client';
 
-// Default alert sound (a short chime) as a data URI so we don't need external files
+// Default alert sound
 const DEFAULT_ALERT_SOUND = 'https://assets.mixkit.co/active_storage/sfx/2869/2869-preview.mp3';
 
 export default function SaweriaAlert({ streamKey, onAlertStart, onAlertEnd }) {
@@ -10,6 +9,7 @@ export default function SaweriaAlert({ streamKey, onAlertStart, onAlertEnd }) {
     const timeoutRef = useRef(null);
     const socketRef = useRef(null);
     const audioRef = useRef(null);
+    const reconnectRef = useRef(null);
 
     // Duration to display the alert (ms)
     const ALERT_DURATION = 8000;
@@ -25,8 +25,8 @@ export default function SaweriaAlert({ streamKey, onAlertStart, onAlertEnd }) {
 
         // Set alert data
         setAlert({
-            donator: data.donator || data.name || 'Someone',
-            amount: data.amount || 0,
+            donator: data.donator || data.name || data.emitter_name || 'Someone',
+            amount: data.amount || data.amount_raw || 0,
             message: data.message || data.msg || '',
             currency: data.currency || 'IDR',
             media: data.media || null,
@@ -48,41 +48,56 @@ export default function SaweriaAlert({ streamKey, onAlertStart, onAlertEnd }) {
     useEffect(() => {
         if (!streamKey) return;
 
-        // Try connecting to Saweria's socket.io server
-        // Saweria uses their events endpoint with the stream key
-        const socket = io('https://events.saweria.co', {
-            query: { streamKey },
-            transports: ['websocket', 'polling'],
-            reconnection: true,
-            reconnectionDelay: 3000,
-        });
+        const connect = () => {
+            // Saweria uses raw WebSockets, NOT socket.io
+            const wsUrl = `wss://events.saweria.co/stream?streamKey=${streamKey}`;
+            console.log('[Saweria] Connecting to:', wsUrl);
 
-        socketRef.current = socket;
+            const ws = new WebSocket(wsUrl);
+            socketRef.current = ws;
 
-        socket.on('connect', () => {
-            console.log('[Saweria] Connected to WebSocket');
-        });
-
-        socket.on('donations', (data) => {
-            console.log('[Saweria] Donation received:', data);
-            // data can be an array or single object
-            const donations = Array.isArray(data) ? data : [data];
-            donations.forEach((donation, index) => {
-                setTimeout(() => showAlert(donation), index * (ALERT_DURATION + 1000));
+            ws.addEventListener('open', () => {
+                console.log('[Saweria] WebSocket connected!');
             });
-        });
 
-        socket.on('disconnect', () => {
-            console.log('[Saweria] Disconnected from WebSocket');
-        });
+            ws.addEventListener('message', (event) => {
+                console.log('[Saweria] Message received:', event.data);
+                try {
+                    const payload = JSON.parse(event.data);
+                    const alerts = payload.data || [];
+                    if (alerts.length > 0) {
+                        // Show each alert sequentially
+                        alerts.forEach((donation, index) => {
+                            setTimeout(() => showAlert(donation), index * (ALERT_DURATION + 1000));
+                        });
+                    }
+                } catch (e) {
+                    console.warn('[Saweria] Failed to parse message:', e);
+                }
+            });
 
-        socket.on('connect_error', (err) => {
-            console.warn('[Saweria] Connection error:', err.message);
-        });
+            ws.addEventListener('close', (event) => {
+                console.log('[Saweria] WebSocket disconnected, reconnecting in 5s...', event.code, event.reason);
+                // Auto-reconnect after 5 seconds
+                reconnectRef.current = setTimeout(() => {
+                    connect();
+                }, 5000);
+            });
+
+            ws.addEventListener('error', (err) => {
+                console.warn('[Saweria] WebSocket error:', err);
+                ws.close();
+            });
+        };
+
+        connect();
 
         return () => {
-            socket.disconnect();
+            if (socketRef.current) {
+                socketRef.current.close();
+            }
             if (timeoutRef.current) clearTimeout(timeoutRef.current);
+            if (reconnectRef.current) clearTimeout(reconnectRef.current);
         };
     }, [streamKey, showAlert]);
 
