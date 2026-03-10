@@ -1,19 +1,20 @@
-import { useState, useEffect, useRef } from 'react';
+import { useState, useEffect } from 'react';
+import SaweriaAlert from './SaweriaAlert';
 
 function App() {
-  const [urls, setUrls] = useState({
+  const [config, setConfig] = useState({
     vdoNinja: '',
     chat: '',
-    saweria: ''
+    saweriaStreamKey: ''
   });
   const [isConfigured, setIsConfigured] = useState(false);
   const [isAlertActive, setIsAlertActive] = useState(false);
 
   // Load from local storage on mount
   useEffect(() => {
-    const saved = localStorage.getItem('irl_overlay_urls');
+    const saved = localStorage.getItem('irl_overlay_config');
     if (saved) {
-      setUrls(JSON.parse(saved));
+      setConfig(JSON.parse(saved));
       setIsConfigured(true);
     }
   }, []);
@@ -31,7 +32,7 @@ function App() {
 
   const handleSave = (e) => {
     e.preventDefault();
-    localStorage.setItem('irl_overlay_urls', JSON.stringify(urls));
+    localStorage.setItem('irl_overlay_config', JSON.stringify(config));
     setIsConfigured(true);
   };
 
@@ -39,9 +40,20 @@ function App() {
     setIsConfigured(false);
   };
 
-  // Mock detection of Saweria alert for demonstration if actual detection isn't possible due to CORS
-  // In a real scenario, this would rely on a webhook or backend integration.
-  // We'll provide a manual toggle for testing the fade effect.
+  // Extract stream key from a Saweria URL or use it directly
+  const getStreamKey = (input) => {
+    if (!input) return '';
+    // If user pastes a full URL like https://saweria.co/widgets/alert?streamKey=abc123
+    try {
+      const url = new URL(input);
+      const key = url.searchParams.get('streamKey');
+      if (key) return key;
+    } catch { }
+    // Otherwise assume it's already a stream key
+    return input;
+  };
+
+  const streamKey = getStreamKey(config.saweriaStreamKey);
 
   if (!isConfigured) {
     return (
@@ -58,8 +70,8 @@ function App() {
               required
               className="w-full bg-neutral-900 border border-neutral-700 rounded-lg px-4 py-2 focus:ring-2 focus:ring-blue-500 focus:outline-none transition-all"
               placeholder="https://vdo.ninja/?view=..."
-              value={urls.vdoNinja}
-              onChange={(e) => setUrls({ ...urls, vdoNinja: e.target.value })}
+              value={config.vdoNinja}
+              onChange={(e) => setConfig({ ...config, vdoNinja: e.target.value })}
             />
           </div>
 
@@ -70,21 +82,22 @@ function App() {
               required
               className="w-full bg-neutral-900 border border-neutral-700 rounded-lg px-4 py-2 focus:ring-2 focus:ring-blue-500 focus:outline-none transition-all"
               placeholder="https://chat-url..."
-              value={urls.chat}
-              onChange={(e) => setUrls({ ...urls, chat: e.target.value })}
+              value={config.chat}
+              onChange={(e) => setConfig({ ...config, chat: e.target.value })}
             />
           </div>
 
           <div className="space-y-2">
-            <label className="text-sm font-medium text-neutral-300">Saweria Overlay URL</label>
+            <label className="text-sm font-medium text-neutral-300">Saweria Stream Key or Alert URL</label>
             <input
-              type="url"
+              type="text"
               required
               className="w-full bg-neutral-900 border border-neutral-700 rounded-lg px-4 py-2 focus:ring-2 focus:ring-blue-500 focus:outline-none transition-all"
-              placeholder="https://saweria.co/overlay/..."
-              value={urls.saweria}
-              onChange={(e) => setUrls({ ...urls, saweria: e.target.value })}
+              placeholder="abc123... or https://saweria.co/widgets/alert?streamKey=..."
+              value={config.saweriaStreamKey}
+              onChange={(e) => setConfig({ ...config, saweriaStreamKey: e.target.value })}
             />
+            <p className="text-xs text-neutral-500">Paste your full Saweria alert URL or just the stream key</p>
           </div>
 
           <button
@@ -119,9 +132,9 @@ function App() {
 
       {/* Left Panel: Camera (VDO.Ninja) */}
       <div className="flex-1 h-full relative border-r border-neutral-800">
-        {urls.vdoNinja ? (
+        {config.vdoNinja ? (
           <iframe
-            src={urls.vdoNinja}
+            src={config.vdoNinja}
             className="w-full h-full object-cover"
             allow="camera; microphone; fullscreen; display-capture; autoplay"
             title="VDO.Ninja Camera"
@@ -134,14 +147,14 @@ function App() {
         )}
       </div>
 
-      {/* Right Panel: Chat & Saweria */}
+      {/* Right Panel: Chat & Saweria Alert */}
       <div className="w-[400px] h-full relative bg-neutral-900 flex flex-col">
 
         {/* Chat Layer */}
         <div className={`absolute inset-0 z-10 transition-all duration-700 ease-in-out ${isAlertActive ? 'opacity-20 blur-sm scale-[0.98]' : 'opacity-100 blur-0 scale-100'}`}>
-          {urls.chat ? (
+          {config.chat ? (
             <iframe
-              src={urls.chat}
+              src={config.chat}
               className="w-full h-full"
               title="Combined Chat"
             />
@@ -152,21 +165,12 @@ function App() {
           )}
         </div>
 
-        {/* Saweria Layer */}
-        <div className={`absolute inset-0 z-20 pointer-events-auto transition-opacity duration-300 ${isAlertActive ? 'opacity-100' : 'opacity-100'}`}>
-          {/* Note: Saweria is transparent until an alert happens. 
-              We leave it opacity-100 always so the alert can render, 
-              but determining *when* to fade the chat requires either 
-              a manual trigger or external backend integration. */}
-          {urls.saweria && (
-            <iframe
-              src={`/api/proxy?url=${encodeURIComponent(urls.saweria)}`}
-              className="w-full h-full"
-              allow="autoplay"
-              title="Saweria Overlay"
-            />
-          )}
-        </div>
+        {/* Saweria Alert Layer (WebSocket-based, NO iframe!) */}
+        <SaweriaAlert
+          streamKey={streamKey}
+          onAlertStart={() => setIsAlertActive(true)}
+          onAlertEnd={() => setIsAlertActive(false)}
+        />
 
       </div>
     </div>
